@@ -3,7 +3,7 @@
 
 ```bash
 
-git clone https://github.com/gotr00t0day/spyhunt.git
+git clone https://github.com/DhritimoyDas/spyhunt.git
 
 cd spyhunt
 
