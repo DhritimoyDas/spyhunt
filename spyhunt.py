@@ -25,7 +25,6 @@ import urllib3
 import warnings
 import re
 import execjs
-import nmap3
 import json
 
 warnings.filterwarnings(action='ignore',module='bs4')
