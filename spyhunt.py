@@ -26,6 +26,7 @@ import warnings
 import re
 import execjs
 import json
+import shodan
 
 warnings.filterwarnings(action='ignore',module='bs4')
 
@@ -40,7 +41,7 @@ banner = """
 ╚════██║██╔═══╝   ╚██╔╝  ██╔══██║██║   ██║██║╚██╗██║   ██║   
 ███████║██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║   ██║   
 ╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝
-V 1.10
+V 1.11
 By c0deninja
             [ Updated by Melfadon ] 
 
@@ -58,24 +59,33 @@ def commands(cmd):
 parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
 
+vuln_group = parser.add_argument_group('Vulnerability')
+crawlers_group = parser.add_argument_group('Crawlers')
+passiverecon_group = parser.add_argument_group('Passive Recon')
+fuzzing_group = parser.add_argument_group('Fuzzing')
+portscanning_group = parser.add_argument_group('Port Scanning')
+
 group.add_argument('-sv', '--save', action='store',
                    help="save output to file",
                    metavar="filename.txt")
 
-parser.add_argument('-s',
+group.add_argument('-wl', '--wordlist', action='store',
+                   help="wordlist to use",
+                   metavar="filename.txt")
+
+parser.add_argument('-th', '--threads',
+                    type=str, help='default 25',
+                    metavar='25')
+
+passiverecon_group.add_argument('-s',
                     type=str, help='scan for subdomains',
                     metavar='domain.com')
 
-parser.add_argument('-j',
-                    type=str, help='find javascript files',
-                    metavar='domain.com')
-
-parser.add_argument('-t', '--tech',
+passiverecon_group.add_argument('-t', '--tech',
                     type=str, help='find technologies',
                     metavar='domain.com')
 
-
-parser.add_argument('-d', '--dns',
+passiverecon_group.add_argument('-d', '--dns',
                     type=str, help='scan for dns records',
                     metavar='domain.com')
 
@@ -87,15 +97,23 @@ parser.add_argument('-r', '--redirects',
                     type=str, help='links getting redirected',
                     metavar='domains.txt')
 
-parser.add_argument('-b', '--brokenlinks',
+vuln_group.add_argument('-b', '--brokenlinks',
                     type=str, help='search for broken links',
                     metavar='domains.txt')
 
-parser.add_argument('-w', '--waybackurls',
+crawlers_group.add_argument('-pspider', '--paramspider',
+                    type=str, help='extract parameters from a domain',
+                    metavar='domain.com')
+
+crawlers_group.add_argument('-w', '--waybackurls',
                     type=str, help='scan for waybackurls',
                     metavar='https://domain.com')
 
-parser.add_argument('-wc', '--webcrawler',
+crawlers_group.add_argument('-j',
+                    type=str, help='find javascript files',
+                    metavar='domain.com')
+
+crawlers_group.add_argument('-wc', '--webcrawler',
                     type=str, help='scan for urls and js files',
                     metavar='https://domain.com')
 
@@ -107,7 +125,7 @@ parser.add_argument('-fm', '--faviconmulti',
                     type=str, help='get favicon hashes',
                     metavar='https://domain.com')
 
-parser.add_argument('-na', '--networkanalyzer',
+passiverecon_group.add_argument('-na', '--networkanalyzer',
                     type=str, help='net analyzer',
                     metavar='https://domain.com')
 
@@ -123,11 +141,15 @@ parser.add_argument('-sc', '--statuscode',
                     type=str, help='statuscode',
                     metavar='domain.com')
 
-parser.add_argument('-co', '--corsmisconfig',
+vuln_group.add_argument('-ph', '--pathhunt',
+                    type=str, help='check for directory traversal',
+                    metavar='domain.txt')
+
+vuln_group.add_argument('-co', '--corsmisconfig',
                     type=str, help='cors misconfiguration',
                     metavar='domains.txt')
 
-parser.add_argument('-hh', '--hostheaderinjection',
+vuln_group.add_argument('-hh', '--hostheaderinjection',
                     type=str, help='host header injection',
                     metavar='domain.com')
 
@@ -139,7 +161,7 @@ parser.add_argument('-ed', '--enumeratedomain',
                     type=str, help='enumerate domains',
                     metavar='domain.com')
 
-parser.add_argument('-smu', '--smuggler',
+vuln_group.add_argument('-smu', '--smuggler',
                     type=str, help='enumerate domains',
                     metavar='domain.com')
 
@@ -147,11 +169,11 @@ parser.add_argument('-rd', '--redirect',
                     type=str, help='get redirect links',
                     metavar='domain list')
 
-parser.add_argument('-ips', '--ipaddresses',
+passiverecon_group.add_argument('-ips', '--ipaddresses',
                     type=str, help='get the ips from a list of domains',
                     metavar='domain list')
 
-parser.add_argument('-dinfo', '--domaininfo',
+passiverecon_group.add_argument('-dinfo', '--domaininfo',
                     type=str, help='get domain information like codes,server,content length',
                     metavar='domain list')
 
@@ -159,25 +181,29 @@ parser.add_argument('-isubs', '--importantsubdomains',
                     type=str, help='extract interesting subdomains from a list like dev, admin, test and etc..',
                     metavar='domain list')
 
-parser.add_argument('-pspider', '--paramspider',
-                    type=str, help='extract parameters from a domain',
-                    metavar='domain.com')
-
-parser.add_argument('-nft', '--not_found',
+fuzzing_group.add_argument('-nft', '--not_found',
                     type=str, help='check for 404 status code',
                     metavar='domains.txt')
 
-parser.add_argument('-ph', '--pathhunt',
-                    type=str, help='check for directory traversal',
-                    metavar='domain.txt')
-
-parser.add_argument('-st', '--subdomaintakeover',
-                    type=str, help='check for subdomain takeovers',
-                    metavar='domain.txt')
-
-parser.add_argument('-n', '--nmap',
+portscanning_group.add_argument('-n', '--nmap',
                     type=str, help='Scan a target with nmap',
                     metavar='domain.com or IP')
+
+fuzzing_group.add_argument('-api', '--api_fuzzer',
+                    type=str, help='Look for API endpoints',
+                    metavar='domain.com')
+
+passiverecon_group.add_argument('-sho', '--shodan',
+                    type=str, help='Recon with shodan',
+                    metavar='domain.com')
+
+vuln_group.add_argument('-fp', '--forbiddenpass',
+                    type=str, help='Bypass 403 forbidden',
+                    metavar='domain.com')
+
+fuzzing_group.add_argument('-db', '--directorybrute',
+                    type=str, help='Brute force filenames and directories',
+                    metavar='domain.com')
 
 
 args = parser.parse_args()
@@ -214,7 +240,7 @@ if args.s:
             certsh.writelines(certshout)
     else:
         commands(f"subfinder -d {args.s}")
-        commands(f"./tools/assetfinder -subs-only {args.s} | uniq | sort")
+        commands(f"assetfinder -subs-only {args.s} | uniq | sort")
         commands(f"./scripts/spotter.sh {args.s} | uniq | sort")
         commands(f"./scripts/certsh.sh {args.s} | uniq | sort") 
 
@@ -469,58 +495,6 @@ if args.j:
         if not path.exists(f"{args.save}"):
             print(Fore.RED + "ERROR!")
     else:
-        response = requests.get(args.j)
-        html_content = response.text
-        pattern = r'<script\s+(?:[^>]*?\s+)?src=(["\'])(.*?)\1'
-
-        def extract_js(html_content):
-            matches = re.findall(pattern, html_content, re.IGNORECASE)
-            js_urls = []
-            for match in matches:
-                relative_url = match[1]
-                if relative_url.startswith(('http://', 'https://')):
-                    full_url = relative_url
-                elif relative_url.startswith('//'):
-                    parsed_base_url = urlparse(args.j)
-                    full_url = f"{parsed_base_url.scheme}:{relative_url}"
-                else:
-                    full_url = urljoin(args.j, relative_url)
-                js_urls.append(full_url)
-            return js_urls
-
-        def extract_endpoints(js_url):
-            response = requests.get(js_url)
-            js_content = response.text
-
-            context = execjs.get().compile(js_content)
-            urls = [item for item in context.eval("Object.values(this)") if isinstance(item, str) and item.startswith(('http://', 'https://'))]
-
-            return urls
-
-        
-        with ThreadPoolExecutor() as executor:
-             js_urls = executor.submit(extract_js, html_content).result()
-             
-        try:
-            all_endpoints = []
-            with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(extract_endpoints, js_url) for js_url in js_urls]
-                for future in concurrent.futures.as_completed(futures):
-                    endpoints = future.result()
-                    all_endpoints.extend(endpoints)
-        except execjs._exceptions.ProcessExitedWithNonZeroStatus:
-            pass
-
-        for js_url in js_urls:
-            print(js_url)
-
-        print("\n\n")
-        print("-------- ENDPOINTS -----------")
-        print("\n\n")
-
-        for endpoint in all_endpoints:
-            print(f"{endpoint}\n")
-
         commands(f"echo {args.j} | waybackurls | grep '\\.js$' | anew")
         commands(f"echo {args.j} | gau | grep -Eo 'https?://\\S+?\\.js' | anew")
 
@@ -604,14 +578,32 @@ if args.redirect:
                 print(domainlist)
 
 if args.ipaddresses:
+    ip_list = []
+
     with open(f"{args.ipaddresses}", "r") as f:
         domains = [x.strip() for x in f.readlines()]
-    for domain_list in domains:
+
+    def scan(domain: str):
         try:
-            ips = socket.gethostbyname(domain_list)
-            print(f"{Fore.GREEN} {domain_list} {Fore.WHITE}- {Fore.CYAN}{ips}")
+            ips = socket.gethostbyname(domain)
+            ip_list.append(ips)
+            print(f"{Fore.GREEN} {domain} {Fore.WHITE}- {Fore.CYAN}{ips}")
         except socket.gaierror:
             pass
+        except UnicodeError:
+            pass
+
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = [executor.submit(scan, domain) for domain in domains]
+        
+        for future in futures:
+            future.result()
+    
+    with open("ips.txt", "w") as file:
+        ip_list = list(dict.fromkeys(ip_list))
+        for iplist in ip_list:
+            file.write(f"{iplist}\n")
+
 
 if args.domaininfo:
     with open(f"{args.domaininfo}", "r") as f:
@@ -759,6 +751,140 @@ if args.nmap:
                 product = service.get("product")
                 print(f"{Fore.WHITE}Port: {Fore.CYAN}{portid}, {Fore.WHITE}Product: {Fore.CYAN}{product}")
 
+if args.api_fuzzer:
+    s = requests.Session()
+    with open("payloads/api-endpoints.txt", "r") as file:
+        api_endpoints = [x.strip() for x in file.readlines()]
+    
+    def check_endpoint(endpoint):
+        r = s.get(f"{args.api_fuzzer}/{endpoint}", verify=False, headers=header)
+        if r.status_code == 200:
+            results = f"{Fore.GREEN}{args.api_fuzzer}/{endpoint}"
+        else:
+            results = f"{args.api_fuzzer}/{endpoint}"
+        
+        return results
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(check_endpoint, endpoint) for endpoint in api_endpoints]
+        for future in concurrent.futures.as_completed(futures):
+            print(future.result())
+
+if args.shodan:
+    key = input("Shodan Key: ")
+    print("\n")
+    api = shodan.Shodan(str(key))
+    try:
+        results = api.search(args.shodan)
+        results_ = []
+        results_5 = []
+        for result in results['matches']:
+            results_.append(result['ip_str'])
+        results_5.append(results_[0:50])
+        if results_5:
+            print(f"{Fore.MAGENTA}[+] {Fore.CYAN}-{Fore.WHITE} Shodan IPs: {Fore.GREEN}{', '.join(map(str,results_5))}")
+        if not results_5:
+            pass
+    except shodan.APIError:
+        print(f"{Fore.MAGENTA}[+] {Fore.CYAN}-{Fore.YELLOW} Shodan Key: {Fore.GREEN} Invalid Key")
+    except socket.herror:
+        pass
 
 
+if args.forbiddenpass:
+    def word_list(wordlist: str) -> str:
+        try:
+            with open(wordlist, "r") as f:
+                data = [x.strip() for x in f.readlines()] 
+            return data
+        except FileNotFoundError as e:
+            print(f"File not found: {e}")
 
+    wordlist = word_list("payloads/bypasses.txt")
+
+    def header_bypass():
+        headers = [
+            {'User-Agent': user_agent},
+            {'User-Agent': str(user_agent), 'X-Custom-IP-Authorization': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-For': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-For': '127.0.0.1:80'},
+            {'User-Agent': str(user_agent), 'X-Originally-Forwarded-For': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Originating-': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Originating-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'True-Client-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-WAP-Profile': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Arbitrary': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-HTTP-DestinationURL': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Proto': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Destination': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Remote-IP': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Client-IP': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Host': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Host': 'http://127.0.0.1'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '4443'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '80'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '8080'},
+            {'User-Agent': str(user_agent), 'X-Forwarded-Port': '8443'},
+            {'User-Agent': str(user_agent), 'X-ProxyUser-Ip': '127.0.0.1'},
+            {'User-Agent': str(user_agent), 'Client-IP': '127.0.0.1'}
+
+        ]
+        return headers
+    
+    def do_request(url: str, stream=False):
+        headers = header_bypass()
+        try:
+            for header in headers:
+                if stream:
+                    s = requests.Session()
+                    r = s.get(url, stream=True, headers=header)
+                else:
+                    s = requests.Session()
+                    r = s.get(url, headers=header)
+                if r.status_code == 200:
+                    print(Fore.WHITE + url + ' ' + json.dumps(list(header.items())[-1]) + Fore.GREEN + " [{}]".format(r.status_code))
+                else:
+                    print(Fore.WHITE + url + ' ' + json.dumps(list(header.items())[-1]) + Fore.RED + " [{}]".format(r.status_code))
+        except requests.exceptions.ConnectionError as ce_error:
+            pass
+        except requests.exceptions.Timeout as t_error:
+            print("Connection Timeout Error: ", t_error)
+            pass
+        except requests.exceptions.RequestException as req_err:
+            print("Some Ambiguous Exception:", req_err)
+            pass
+
+    def main(wordlist):
+        for bypass in wordlist:
+            links = f"{args.forbiddenpass}{bypass}"
+            do_request(links)
+
+    if __name__ == "__main__":
+        main(wordlist)
+
+if args.directorybrute:
+    if args.wordlist:
+        if args.threads:
+            with open(f"{args.wordlist}", "r") as f:
+                wordlist_ = [x.strip() for x in f.readlines()]
+            
+            print(f"Target: {Fore.CYAN}{args.directorybrute}{Fore.RESET}| Wordlist: {Fore.CYAN}{args.wordlist}{Fore.RESET}\n")
+            
+            def dorequests(wordlist: str):
+                s = requests.Session()
+                r = s.get(f"{args.directorybrute}/{wordlist}", verify=False, headers=header, timeout=10)
+                if r.status_code == 200:
+                    print(f"{args.directorybrute}/{Fore.GREEN}{wordlist}{Fore.RESET}")
+
+            threads = f"{args.threads}"
+            
+            with ThreadPoolExecutor(max_workers=int(threads)) as executor:
+                futures = [executor.submit(dorequests, wordlist) for wordlist in wordlist_]
+            
+            for future in futures:
+                future.result()
+
+        
+            
+        
+        
